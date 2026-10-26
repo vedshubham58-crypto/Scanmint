@@ -39,7 +39,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var adFree by mutableStateOf(prefs.adFree)
         private set
 
-    /** Set after a new document is saved; the activity may show an ad, then opens it. */
+    /** Set after a new document is saved; the activity opens it. */
     var justSaved by mutableStateOf<Doc?>(null)
 
     private val context get() = getApplication<Application>()
@@ -193,17 +193,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         toast = "Saved"
     }
 
-    /** True when a full-screen ad is due after this save (every second save). */
-    fun adDueAfterSave(): Boolean {
+    /**
+     * True when a full-screen ad may show before Save or Share (or after a new scan).
+     * At most one per [AD_GAP_MS], so sharing to several chats doesn't mean an ad each time.
+     */
+    fun adDue(): Boolean {
         if (adFree) return false
-        val n = prefs.savesSinceAd + 1
-        return if (n >= SAVES_PER_AD) {
-            prefs.savesSinceAd = 0
-            true
-        } else {
-            prefs.savesSinceAd = n
-            false
-        }
+        return System.currentTimeMillis() - prefs.lastAdAt >= AD_GAP_MS
+    }
+
+    fun adShown() {
+        prefs.lastAdAt = System.currentTimeMillis()
     }
 
     fun grantAdFreeDay() {
@@ -222,7 +222,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }.getOrNull()
 
     companion object {
-        const val SAVES_PER_AD = 2
+        const val AD_GAP_MS = 60_000L
 
         fun safeFileName(name: String): String =
             name.replace(Regex("[\\\\/:*?\"<>|\\n\\r]"), "_").trim().take(80).ifEmpty { "ScanMint" }

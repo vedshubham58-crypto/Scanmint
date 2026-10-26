@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * All AdMob code lives here: the consent popup, banner, a full-screen (interstitial)
- * ad after saving a document, and rewarded ads that turn off ads for a while.
+ * ad before saving or sharing a document, and rewarded ads that turn off ads for a while.
  */
 object Ads {
     private const val TAG = "Ads"
@@ -134,13 +134,16 @@ object Ads {
         )
     }
 
-    /** Shows a full-screen ad if one is loaded, then runs [onDone] either way. */
-    fun showInterstitial(activity: Activity, onDone: () -> Unit) {
+    /**
+     * Shows a full-screen ad if one is loaded, then runs [onDone] either way.
+     * Returns true when an ad was actually shown.
+     */
+    fun showInterstitial(activity: Activity, onDone: () -> Unit): Boolean {
         val ad = interstitial
         if (ad == null) {
             loadInterstitial(activity)
             onDone()
-            return
+            return false
         }
         interstitial = null
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -155,6 +158,7 @@ object Ads {
             }
         }
         ad.show(activity)
+        return true
     }
 
     fun rewardedAvailable(): Boolean = rewarded != null

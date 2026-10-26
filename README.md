@@ -11,7 +11,7 @@ and save or share them as PDF. Everything stays on the phone.
 - **Import** photos from the gallery or an existing PDF.
 - **Merge** several documents into one, **compress** a PDF for WhatsApp or email.
 - **Share**, save to the phone (Downloads, Drive), rename, delete, search.
-- Ads: banner on the home screen, a full-screen ad after every second save, and an optional
+- Ads: banner on the home screen, a full-screen ad before Save and Share (at most one a minute), and an optional
   video that turns ads off for 24 hours. Pro (no ads, password PDFs, signing) comes next.
 
 ## Test build

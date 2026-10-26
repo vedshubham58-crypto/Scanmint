@@ -101,11 +101,12 @@ private fun App(activity: Activity) {
     val actions = remember(vm) {
         object : DocActions {
             override fun open(doc: Doc) { vm.route = Route.Viewer(doc.id) }
-            override fun share(doc: Doc) {
+            // A full-screen ad runs first, then the share sheet or file picker opens.
+            override fun share(doc: Doc) = withAd(activity, vm) {
                 runCatching { activity.startActivity(vm.shareIntent(doc)) }
                     .onFailure { vm.toast = "Could not share this file" }
             }
-            override fun saveToPhone(doc: Doc) {
+            override fun saveToPhone(doc: Doc) = withAd(activity, vm) {
                 exporting = doc
                 exportLauncher.launch(AppViewModel.safeFileName(doc.name) + ".pdf")
             }
@@ -116,15 +117,11 @@ private fun App(activity: Activity) {
         }
     }
 
-    // A new document: maybe a full-screen ad (every second save), then open it.
+    // A new document opens right away; the ad comes when the user saves or shares it.
     LaunchedEffect(vm.justSaved) {
         val doc = vm.justSaved ?: return@LaunchedEffect
         vm.justSaved = null
-        if (vm.adDueAfterSave()) {
-            Ads.showInterstitial(activity) { vm.route = Route.Viewer(doc.id) }
-        } else {
-            vm.route = Route.Viewer(doc.id)
-        }
+        vm.route = Route.Viewer(doc.id)
     }
 
     LaunchedEffect(vm.toast) {
@@ -169,6 +166,15 @@ private fun App(activity: Activity) {
     }
 
     vm.busy?.let { BusyCard(it) }
+}
+
+/** Runs [action] after a full-screen ad when one is due, otherwise straight away. */
+private fun withAd(activity: Activity, vm: AppViewModel, action: () -> Unit) {
+    if (!vm.adDue()) {
+        action()
+        return
+    }
+    if (Ads.showInterstitial(activity, action)) vm.adShown()
 }
 
 /** Things you can do with a saved document, shared by the home list and the viewer. */

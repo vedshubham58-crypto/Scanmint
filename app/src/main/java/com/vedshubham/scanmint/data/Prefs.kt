@@ -2,13 +2,13 @@ package com.vedshubham.scanmint.data
 
 import android.content.Context
 
-/** Small settings: how many saves since the last full-screen ad, and ad-free time from videos. */
+/** Small settings: when the last full-screen ad showed, and ad-free time from videos. */
 class Prefs(context: Context) {
     private val prefs = context.getSharedPreferences("scanmint", Context.MODE_PRIVATE)
 
-    var savesSinceAd: Int
-        get() = prefs.getInt("saves_since_ad", 0)
-        set(v) = prefs.edit().putInt("saves_since_ad", v).apply()
+    var lastAdAt: Long
+        get() = prefs.getLong("last_ad_at", 0L)
+        set(v) = prefs.edit().putLong("last_ad_at", v).apply()
 
     /** Time until which ads stay off because the user watched a video. */
     var adFreeUntil: Long
