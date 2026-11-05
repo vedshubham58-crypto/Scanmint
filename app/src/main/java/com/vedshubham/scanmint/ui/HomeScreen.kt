@@ -85,15 +85,12 @@ fun HomeScreen(
     vm: AppViewModel,
     actions: DocActions,
     onTool: (Tool) -> Unit,
-    onWatchVideo: () -> Unit,
-    onPrivacy: () -> Unit,
 ) {
     val docs by vm.store.docs.collectAsState()
     val adsReady by Ads.ready.collectAsState()
-    val privacyNeeded by Ads.privacyOptionsRequired.collectAsState()
+    val pro by com.vedshubham.scanmint.billing.Billing.pro.collectAsState()
     var query by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf<Tool?>(null) }
-    var showPro by remember { mutableStateOf(false) }
     var compressing by remember { mutableStateOf<Doc?>(null) }
 
     LaunchedEffect(Unit) { vm.recheckAdFree() }
@@ -108,7 +105,7 @@ fun HomeScreen(
                 Modifier.fillMaxSize().statusBarsPadding(),
                 contentPadding = PaddingValues(bottom = 120.dp),
             ) {
-                item { TopRow(onPro = { showPro = true }) }
+                item { TopRow(pro = pro, onPro = { onTool(Tool.PRO) }) }
                 item {
                     OutlinedTextField(
                         value = query,
@@ -132,7 +129,6 @@ fun HomeScreen(
                     ToolGrid { tool ->
                         when (tool) {
                             Tool.MERGE, Tool.COMPRESS -> picking = tool
-                            Tool.PRO -> showPro = true
                             else -> onTool(tool)
                         }
                     }
@@ -158,7 +154,7 @@ fun HomeScreen(
         }
 
         Box(Modifier.navigationBarsPadding()) {
-            if (adsReady && !vm.adFree) BannerAd()
+            if (adsReady && !vm.adFree && !pro) BannerAd()
         }
     }
 
@@ -178,19 +174,10 @@ fun HomeScreen(
     compressing?.let { doc ->
         CompressDialog(doc, onDismiss = { compressing = null }, onPick = { actions.compress(doc, it) })
     }
-    if (showPro) {
-        ProDialog(
-            adFree = vm.adFree,
-            privacyNeeded = privacyNeeded,
-            onDismiss = { showPro = false },
-            onWatchVideo = { showPro = false; onWatchVideo() },
-            onPrivacy = onPrivacy,
-        )
-    }
 }
 
 @Composable
-private fun TopRow(onPro: () -> Unit) {
+private fun TopRow(pro: Boolean, onPro: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -208,7 +195,7 @@ private fun TopRow(onPro: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         Text(
-            "GO PRO",
+            if (pro) "PRO ✓" else "GO PRO",
             Modifier
                 .clip(RoundedCornerShape(50))
                 .background(Mint.Gold)
@@ -271,6 +258,8 @@ private fun DocRow(vm: AppViewModel, doc: Doc, actions: DocActions, onCompress: 
                     DropdownMenuItem(text = { Text("Save to phone") }, onClick = { menu = false; actions.saveToPhone(doc) })
                     DropdownMenuItem(text = { Text("Copy text") }, onClick = { menu = false; actions.readText(doc) })
                     DropdownMenuItem(text = { Text("Compress") }, onClick = { menu = false; onCompress(doc) })
+                    DropdownMenuItem(text = { Text("Sign ★") }, onClick = { menu = false; actions.sign(doc) })
+                    DropdownMenuItem(text = { Text("Lock with password ★") }, onClick = { menu = false; actions.lock(doc) })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; deleting = true })
                 }
@@ -315,41 +304,4 @@ private fun ScanButton(modifier: Modifier, onClick: () -> Unit) {
     ) {
         Icon(Icons.Filled.PhotoCamera, "Scan", tint = Color.White, modifier = Modifier.size(34.dp))
     }
-}
-
-@Composable
-private fun ProDialog(
-    adFree: Boolean,
-    privacyNeeded: Boolean,
-    onDismiss: () -> Unit,
-    onWatchVideo: () -> Unit,
-    onPrivacy: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Filled.Star, null, tint = Color(0xFFE0A800)) },
-        title = { Text("ScanMint Pro") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("• No ads, ever")
-                Text("• Password-locked PDFs")
-                Text("• Sign documents")
-                Text("• Unlimited text copy")
-                Spacer(Modifier.height(4.dp))
-                Text("₹99 a month or ₹499 a year, with a 3-day free trial. Coming in the next update.", fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (adFree) "Ads are off for now. Thanks for watching!" else "For now, watch one short video to turn ads off for 24 hours.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (privacyNeeded) {
-                    TextButton(onClick = onPrivacy) { Text("Privacy settings") }
-                }
-            }
-        },
-        confirmButton = {
-            if (!adFree) TextButton(onClick = onWatchVideo) { Text("Watch video") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
 }

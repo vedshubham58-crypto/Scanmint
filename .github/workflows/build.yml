@@ -24,6 +24,10 @@ jobs:
       - name: Run tests and build the test APK
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
 
+      # Checks the store version also builds (code shrinking, billing). Not signed here.
+      - name: Check the release build
+        run: ./gradlew --no-daemon bundleRelease
+
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:

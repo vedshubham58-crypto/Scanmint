@@ -26,7 +26,22 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (prop("VERSION_CODE").ifEmpty { "1" }).toInt()
-        versionName = "0.1.0"
+        versionName = "1.0.0"
+    }
+
+    // The upload key for Google Play. The release workflow unlocks it from signing/upload-key.p12.enc
+    // with the SIGNING_PASSWORD secret; see PUBLISHING.md.
+    val keystore = prop("SIGNING_KEYSTORE")
+    signingConfigs {
+        if (keystore.isNotEmpty()) {
+            create("upload") {
+                storeFile = file(keystore)
+                storeType = "PKCS12"
+                storePassword = prop("SIGNING_PASSWORD")
+                keyAlias = "upload"
+                keyPassword = prop("SIGNING_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -40,6 +55,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (keystore.isNotEmpty()) signingConfig = signingConfigs.getByName("upload")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             manifestPlaceholders["admobAppId"] = realOrTest("ADMOB_APP_ID", testAppId)
             buildConfigField("String", "BANNER_ID", "\"${realOrTest("ADMOB_BANNER_ID", testBannerId)}\"")
@@ -90,6 +106,9 @@ dependencies {
     // Ads (AdMob) and the consent popup required in Europe/UK
     implementation("com.google.android.gms:play-services-ads:24.3.0")
     implementation("com.google.android.ump:user-messaging-platform:3.2.0")
+
+    // Google Play subscriptions (ScanMint Pro)
+    implementation("com.android.billingclient:billing:8.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }

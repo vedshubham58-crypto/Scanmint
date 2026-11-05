@@ -22,6 +22,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TextSnippet
@@ -83,6 +85,7 @@ fun ViewerScreen(vm: AppViewModel, docId: String, actions: DocActions, onBack: (
                     fontSize = 12.sp,
                 )
             }
+            IconButton(onClick = { compressing = true }) { Icon(Icons.Outlined.Compress, "Compress", tint = Color.White) }
             IconButton(onClick = { renaming = true }) { Icon(Icons.Outlined.Edit, "Rename", tint = Color.White) }
             IconButton(onClick = { deleting = true }) { Icon(Icons.Outlined.Delete, "Delete", tint = Color.White) }
         }
@@ -95,8 +98,9 @@ fun ViewerScreen(vm: AppViewModel, docId: String, actions: DocActions, onBack: (
         ) {
             BarAction(Icons.Outlined.Share, "Share") { actions.share(doc) }
             BarAction(Icons.Outlined.Download, "Save") { actions.saveToPhone(doc) }
-            BarAction(Icons.Outlined.TextSnippet, "Copy text") { actions.readText(doc) }
-            BarAction(Icons.Outlined.Compress, "Compress") { compressing = true }
+            BarAction(Icons.Outlined.Draw, "Sign") { actions.sign(doc) }
+            BarAction(Icons.Outlined.Lock, "Lock") { actions.lock(doc) }
+            BarAction(Icons.Outlined.TextSnippet, "Text") { actions.readText(doc) }
         }
     }
 

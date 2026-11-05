@@ -23,7 +23,13 @@ sealed interface Route {
     data object Home : Route
     data class Viewer(val id: String) : Route
     data class Text(val title: String, val text: String) : Route
+    /** The Pro page. [reason] says which locked feature sent the user here; [back] is where Close goes. */
+    data class Pro(val reason: String?, val back: Route) : Route
+    data class Sign(val id: String) : Route
 }
+
+/** A password-locked copy is ready to share or save. */
+data class LockedCopy(val file: File, val name: String, val target: com.vedshubham.scanmint.ui.LockedTarget)
 
 /** A long job in progress, shown as a card over the screen. */
 data class Busy(val message: String, val progress: Float? = null)
@@ -31,6 +37,10 @@ data class Busy(val message: String, val progress: Float? = null)
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val store = DocStore(app)
     val prefs = Prefs(app)
+    val signatures = com.vedshubham.scanmint.data.Signatures(app)
+
+    /** Set when a locked copy is ready; the activity opens the share sheet or file picker. */
+    var lockedCopy by mutableStateOf<LockedCopy?>(null)
 
     var route by mutableStateOf<Route>(Route.Home)
     var busy by mutableStateOf<Busy?>(null)
@@ -160,6 +170,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Saves a new copy of [doc] with the user's signature drawn where they placed it. */
+    fun sign(doc: Doc, at: com.vedshubham.scanmint.ui.SignPlacement) = job("Signing…") {
+        val signature = withContext(Dispatchers.IO) { signatures.load() } ?: error("Draw your signature first")
+        val file = store.newFile()
+        withContext(Dispatchers.IO) {
+            val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+            PdfTools.rebuild(
+                listOf(store.fileOf(doc)), file, PdfTools.Quality.HIGH, progress("Signing…"),
+                overlay = { page, canvas, width, height ->
+                    if (page == at.page) {
+                        val w = width * at.width
+                        val h = w * signature.height / signature.width
+                        val left = width * at.centerX - w / 2
+                        val top = height * at.centerY - h / 2
+                        canvas.drawBitmap(signature, null, android.graphics.RectF(left, top, left + w, top + h), paint)
+                    }
+                },
+            )
+        }
+        signature.recycle()
+        justSaved = store.add(file, "${doc.name} (signed)", doc.pages)
+        toast = "Signed copy saved"
+    }
+
+    /** Makes a password-locked copy of [doc] for sharing or saving. The copy in the app stays open. */
+    fun lock(doc: Doc, password: String, target: com.vedshubham.scanmint.ui.LockedTarget) = job("Locking…") {
+        val dir = File(context.cacheDir, "share").apply { mkdirs() }
+        val out = withContext(Dispatchers.IO) {
+            dir.listFiles()?.forEach { it.delete() }
+            val name = safeFileName(doc.name) + " (locked).pdf"
+            File(dir, name).also {
+                PdfTools.rebuild(
+                    listOf(store.fileOf(doc)), it, PdfTools.Quality.HIGH, progress("Locking…"),
+                    lock = com.vedshubham.scanmint.pdf.PdfLock(password),
+                )
+            }
+        }
+        lockedCopy = LockedCopy(out, doc.name + " (locked)", target)
+    }
+
     fun rename(doc: Doc, name: String) = viewModelScope.launch { store.rename(doc, name) }
 
     fun delete(doc: Doc) = viewModelScope.launch {
@@ -174,20 +224,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         dir.listFiles()?.forEach { it.delete() }
         val copy = File(dir, safeFileName(doc.name) + ".pdf")
         store.fileOf(doc).copyTo(copy, overwrite = true)
+        return shareIntent(copy, doc.name)
+    }
+
+    /** A share sheet for a file already in the share folder. */
+    fun shareIntent(copy: File, name: String): Intent {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", copy)
         val send = Intent(Intent.ACTION_SEND)
             .setType("application/pdf")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        return Intent.createChooser(send, "Share ${doc.name}")
+        return Intent.createChooser(send, "Share $name")
     }
 
     /** Saves a copy where the user chose (Downloads, Drive, …). */
-    fun exportTo(doc: Doc, target: Uri) = job("Saving…") {
+    fun exportTo(doc: Doc, target: Uri) = exportFile(store.fileOf(doc), target)
+
+    fun exportFile(source: File, target: Uri) = job("Saving…") {
         withContext(Dispatchers.IO) {
             context.contentResolver.openOutputStream(target).use { out ->
                 requireNotNull(out) { "Could not save there" }
-                store.fileOf(doc).inputStream().use { it.copyTo(out) }
+                source.inputStream().use { it.copyTo(out) }
             }
         }
         toast = "Saved"
@@ -198,7 +255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * At most one per [AD_GAP_MS], so sharing to several chats doesn't mean an ad each time.
      */
     fun adDue(): Boolean {
-        if (adFree) return false
+        if (adFree || com.vedshubham.scanmint.billing.Billing.pro.value) return false
         return System.currentTimeMillis() - prefs.lastAdAt >= AD_GAP_MS
     }
 

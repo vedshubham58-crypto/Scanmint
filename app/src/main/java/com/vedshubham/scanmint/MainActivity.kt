@@ -22,6 +22,14 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.vedshubham.scanmint.ads.Ads
+import com.vedshubham.scanmint.billing.Billing
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.runtime.collectAsState
+import com.vedshubham.scanmint.ui.LockDialog
+import com.vedshubham.scanmint.ui.LockedTarget
+import com.vedshubham.scanmint.ui.ProScreen
+import com.vedshubham.scanmint.ui.SignScreen
 import com.vedshubham.scanmint.data.Doc
 import com.vedshubham.scanmint.ui.BusyCard
 import com.vedshubham.scanmint.ui.HomeScreen
@@ -41,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        Billing.setUp(this)
         Ads.setUp(this)
         setContent {
             ScanMintTheme { App(this) }
@@ -52,7 +61,11 @@ class MainActivity : ComponentActivity() {
 private fun App(activity: Activity) {
     val vm: AppViewModel = viewModel()
     var scanKind by remember { mutableStateOf(ScanKind.DOCUMENT) }
-    var exporting by remember { mutableStateOf<Doc?>(null) }
+    var exporting by remember { mutableStateOf<java.io.File?>(null) }
+    var locking by remember { mutableStateOf<Doc?>(null) }
+    val pro by Billing.pro.collectAsState()
+    val billingMessage by Billing.message.collectAsState()
+    val privacyNeeded by Ads.privacyOptionsRequired.collectAsState()
 
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
@@ -93,9 +106,9 @@ private fun App(activity: Activity) {
         if (uri != null) vm.importPdf(uri)
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        val doc = exporting
+        val file = exporting
         exporting = null
-        if (uri != null && doc != null) vm.exportTo(doc, uri)
+        if (uri != null && file != null) vm.exportFile(file, uri)
     }
 
     val actions = remember(vm) {
@@ -107,8 +120,16 @@ private fun App(activity: Activity) {
                     .onFailure { vm.toast = "Could not share this file" }
             }
             override fun saveToPhone(doc: Doc) = withAd(activity, vm) {
-                exporting = doc
+                exporting = vm.store.fileOf(doc)
                 exportLauncher.launch(AppViewModel.safeFileName(doc.name) + ".pdf")
+            }
+            override fun lock(doc: Doc) {
+                if (Billing.pro.value) locking = doc
+                else vm.route = Route.Pro("Password-locking PDFs is part of Pro.", vm.route)
+            }
+            override fun sign(doc: Doc) {
+                if (Billing.pro.value) vm.route = Route.Sign(doc.id)
+                else vm.route = Route.Pro("Signing documents is part of Pro.", vm.route)
             }
             override fun rename(doc: Doc, name: String) { vm.rename(doc, name) }
             override fun delete(doc: Doc) { vm.delete(doc) }
@@ -124,13 +145,45 @@ private fun App(activity: Activity) {
         vm.route = Route.Viewer(doc.id)
     }
 
+    // A password-locked copy is ready: share it or let the user pick where to save it.
+    LaunchedEffect(vm.lockedCopy) {
+        val copy = vm.lockedCopy ?: return@LaunchedEffect
+        vm.lockedCopy = null
+        when (copy.target) {
+            LockedTarget.SHARE -> runCatching { activity.startActivity(vm.shareIntent(copy.file, copy.name)) }
+                .onFailure { vm.toast = "Could not share this file" }
+            LockedTarget.SAVE -> {
+                exporting = copy.file
+                exportLauncher.launch(copy.file.name)
+            }
+        }
+    }
+
+    LaunchedEffect(billingMessage) {
+        val message = billingMessage ?: return@LaunchedEffect
+        Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+        Billing.messageShown()
+        if (Billing.pro.value && vm.route is Route.Pro) vm.route = (vm.route as Route.Pro).back
+    }
+
     LaunchedEffect(vm.toast) {
         val message = vm.toast ?: return@LaunchedEffect
         Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
         vm.toast = null
     }
 
-    BackHandler(enabled = vm.route != Route.Home) { vm.route = Route.Home }
+    BackHandler(enabled = vm.route != Route.Home) {
+        vm.route = when (val r = vm.route) {
+            is Route.Pro -> r.back
+            is Route.Sign -> Route.Viewer(r.id)
+            else -> Route.Home
+        }
+    }
+
+    val watchVideo = {
+        val shown = Ads.showRewarded(activity) { vm.grantAdFreeDay() }
+        if (!shown) vm.toast = "No video ready yet. Try again in a moment."
+    }
 
     when (val route = vm.route) {
         Route.Home -> HomeScreen(
@@ -145,14 +198,10 @@ private fun App(activity: Activity) {
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                     Tool.IMPORT_PDF -> pdfPicker.launch(arrayOf("application/pdf"))
-                    Tool.MERGE, Tool.COMPRESS, Tool.PRO -> Unit // handled inside the home screen
+                    Tool.PRO -> vm.route = Route.Pro(null, Route.Home)
+                    Tool.MERGE, Tool.COMPRESS -> Unit // handled inside the home screen
                 }
             },
-            onWatchVideo = {
-                val shown = Ads.showRewarded(activity) { vm.grantAdFreeDay() }
-                if (!shown) vm.toast = "No video ready yet. Try again in a moment."
-            },
-            onPrivacy = { Ads.showPrivacyOptions(activity) },
         )
         is Route.Viewer -> {
             val doc = vm.store.docs.value.firstOrNull { it.id == route.id }
@@ -163,6 +212,33 @@ private fun App(activity: Activity) {
             }
         }
         is Route.Text -> TextScreen(title = route.title, text = route.text, onBack = { vm.route = Route.Home })
+        is Route.Pro -> ProScreen(
+            activity = activity,
+            reason = route.reason,
+            adFree = vm.adFree,
+            privacyNeeded = privacyNeeded,
+            onBack = { vm.route = route.back },
+            onWatchVideo = {
+                vm.route = route.back
+                watchVideo()
+            },
+            onPrivacyChoices = { Ads.showPrivacyOptions(activity) },
+            onOpenLink = { url ->
+                runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            },
+        )
+        is Route.Sign -> {
+            val doc = vm.store.docs.value.firstOrNull { it.id == route.id }
+            if (doc == null || !pro) {
+                LaunchedEffect(Unit) { vm.route = Route.Home }
+            } else {
+                SignScreen(vm = vm, doc = doc, onBack = { vm.route = Route.Viewer(doc.id) })
+            }
+        }
+    }
+
+    locking?.let { doc ->
+        LockDialog(doc, onDismiss = { locking = null }, onLock = { password, target -> vm.lock(doc, password, target) })
     }
 
     vm.busy?.let { BusyCard(it) }
@@ -170,6 +246,7 @@ private fun App(activity: Activity) {
 
 /** Runs [action] after a full-screen ad when one is due, otherwise straight away. */
 private fun withAd(activity: Activity, vm: AppViewModel, action: () -> Unit) {
+    // adDue() is always false for Pro users and during ad-free time.
     if (!vm.adDue()) {
         action()
         return
@@ -186,4 +263,8 @@ interface DocActions {
     fun delete(doc: Doc)
     fun readText(doc: Doc)
     fun compress(doc: Doc, quality: com.vedshubham.scanmint.pdf.PdfTools.Quality)
+    /** Pro: share or save a password-locked copy. */
+    fun lock(doc: Doc)
+    /** Pro: add your signature. */
+    fun sign(doc: Doc)
 }

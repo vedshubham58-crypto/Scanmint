@@ -57,9 +57,17 @@ object PdfTools {
 
     /**
      * Joins [sources] into one PDF at [target], page by page, re-drawing every page as a picture.
-     * Also used with a single source to make a file smaller.
+     * Also used with a single source to make a file smaller, lock it with a password ([lock]),
+     * or draw something on top of pages ([overlay], given the page number counted from 0).
      */
-    fun rebuild(sources: List<File>, target: File, quality: Quality, onProgress: (Float) -> Unit = {}) {
+    fun rebuild(
+        sources: List<File>,
+        target: File,
+        quality: Quality,
+        onProgress: (Float) -> Unit = {},
+        lock: PdfLock? = null,
+        overlay: ((page: Int, canvas: android.graphics.Canvas, width: Int, height: Int) -> Unit)? = null,
+    ) {
         val total = sources.sumOf { pageCount(it) }.coerceAtLeast(1)
         var done = 0
         val pages = mutableListOf<JpegPage>()
@@ -69,6 +77,7 @@ object PdfTools {
                     val (w, h) = pageSize(renderer, i)
                     val px = (w * quality.pixelsPerPoint).roundToInt().coerceIn(200, 2600)
                     val bitmap = renderPage(renderer, i, px)
+                    overlay?.invoke(done, android.graphics.Canvas(bitmap), bitmap.width, bitmap.height)
                     pages += toPage(bitmap, quality.jpeg, w, h)
                     bitmap.recycle()
                     done++
@@ -76,7 +85,7 @@ object PdfTools {
                 }
             }
         }
-        writeAtomically(target) { JpegPdfWriter.write(pages, it) }
+        writeAtomically(target) { JpegPdfWriter.write(pages, it, lock) }
     }
 
     /** Makes a PDF from gallery pictures, one picture per A4-wide page. */

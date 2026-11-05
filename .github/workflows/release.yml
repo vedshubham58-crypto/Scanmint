@@ -1,0 +1,77 @@
+name: Store build (Google Play)
+
+# Makes the signed .aab file you upload to Google Play Console.
+# Needs: the SIGNING_PASSWORD secret, the key from "Make upload key", and the
+# four ADMOB_* variables (Settings > Secrets and variables > Actions > Variables).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check everything is set up
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
+          ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+          ADMOB_INTERSTITIAL_ID: ${{ vars.ADMOB_INTERSTITIAL_ID }}
+          ADMOB_REWARDED_ID: ${{ vars.ADMOB_REWARDED_ID }}
+        run: |
+          ok=1
+          [ -n "$SIGNING_PASSWORD" ] || { echo "::error::Missing secret SIGNING_PASSWORD"; ok=0; }
+          [ -f signing/upload-key.p12.enc ] || { echo "::error::No upload key yet. Run the 'Make upload key (run once)' workflow first."; ok=0; }
+          for v in ADMOB_APP_ID ADMOB_BANNER_ID ADMOB_INTERSTITIAL_ID ADMOB_REWARDED_ID; do
+            val="${!v}"
+            if [ -z "$val" ]; then echo "::error::Missing variable $v (your real AdMob ID)"; ok=0; fi
+            case "$val" in *3940256099942544*) echo "::error::$v is Google's TEST id. Use your own AdMob id."; ok=0;; esac
+          done
+          case "$ADMOB_APP_ID" in *~*) ;; "") ;; *) echo "::error::ADMOB_APP_ID should look like ca-app-pub-123...~456 (with ~)"; ok=0;; esac
+          [ $ok = 1 ]
+
+      - name: Unlock the upload key
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -in signing/upload-key.p12.enc -out "$RUNNER_TEMP/upload.p12" -pass env:SIGNING_PASSWORD
+
+      - name: Build the signed app bundle
+        env:
+          SIGNING_KEYSTORE: ${{ runner.temp }}/upload.p12
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
+          ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+          ADMOB_INTERSTITIAL_ID: ${{ vars.ADMOB_INTERSTITIAL_ID }}
+          ADMOB_REWARDED_ID: ${{ vars.ADMOB_REWARDED_ID }}
+        run: |
+          # Every store build needs a higher number than the last one.
+          export VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
+          ./gradlew --no-daemon testDebugUnitTest bundleRelease
+          cp app/build/outputs/bundle/release/app-release.aab scanmint-release.aab
+          rm -f "$RUNNER_TEMP/upload.p12"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      - name: Publish the .aab as a download link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # https://github.com/<owner>/<repo>/releases/download/store-build/scanmint-release.aab
+          gh release delete store-build --yes --cleanup-tag || true
+          gh release create store-build scanmint-release.aab --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Store build (upload to Google Play)" \
+            --notes "Signed app bundle, version code $VERSION_CODE, built from ${GITHUB_SHA::7}. Upload this file in Play Console."
