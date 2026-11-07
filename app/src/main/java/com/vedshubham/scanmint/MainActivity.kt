@@ -23,11 +23,15 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.vedshubham.scanmint.ads.Ads
 import com.vedshubham.scanmint.billing.Billing
+import com.vedshubham.scanmint.review.Rating
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.collectAsState
 import com.vedshubham.scanmint.ui.LockDialog
 import com.vedshubham.scanmint.ui.LockedTarget
+import com.vedshubham.scanmint.ui.MenuItem
+import com.vedshubham.scanmint.ui.PRIVACY_POLICY_URL
 import com.vedshubham.scanmint.ui.ProScreen
 import com.vedshubham.scanmint.ui.SignScreen
 import com.vedshubham.scanmint.data.Doc
@@ -66,6 +70,8 @@ private fun App(activity: Activity) {
     val pro by Billing.pro.collectAsState()
     val billingMessage by Billing.message.collectAsState()
     val privacyNeeded by Ads.privacyOptionsRequired.collectAsState()
+    // True while the share sheet is open; coming back to the app counts as a successful share.
+    var sharing by remember { mutableStateOf(false) }
 
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
@@ -117,6 +123,7 @@ private fun App(activity: Activity) {
             // A full-screen ad runs first, then the share sheet or file picker opens.
             override fun share(doc: Doc) = withAd(activity, vm) {
                 runCatching { activity.startActivity(vm.shareIntent(doc)) }
+                    .onSuccess { sharing = true }
                     .onFailure { vm.toast = "Could not share this file" }
             }
             override fun saveToPhone(doc: Doc) = withAd(activity, vm) {
@@ -151,12 +158,26 @@ private fun App(activity: Activity) {
         vm.lockedCopy = null
         when (copy.target) {
             LockedTarget.SHARE -> runCatching { activity.startActivity(vm.shareIntent(copy.file, copy.name)) }
+                .onSuccess { sharing = true }
                 .onFailure { vm.toast = "Could not share this file" }
             LockedTarget.SAVE -> {
                 exporting = copy.file
                 exportLauncher.launch(copy.file.name)
             }
         }
+    }
+
+    LifecycleResumeEffect(Unit) {
+        if (sharing) {
+            sharing = false
+            vm.successes++
+        }
+        onPauseOrDispose { }
+    }
+
+    // After a few saves or shares, Google's review card may appear (Google limits how often).
+    LaunchedEffect(vm.successes) {
+        if (vm.successes > 0) Rating.onSuccess(activity)
     }
 
     LaunchedEffect(billingMessage) {
@@ -200,6 +221,15 @@ private fun App(activity: Activity) {
                     Tool.IMPORT_PDF -> pdfPicker.launch(arrayOf("application/pdf"))
                     Tool.PRO -> vm.route = Route.Pro(null, Route.Home)
                     Tool.MERGE, Tool.COMPRESS -> Unit // handled inside the home screen
+                }
+            },
+            onMenu = { item ->
+                when (item) {
+                    MenuItem.RATE -> runCatching { Rating.openStorePage(activity) }
+                    MenuItem.PRIVACY_POLICY -> runCatching {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
+                    }
+                    MenuItem.AD_CHOICES -> Ads.showPrivacyOptions(activity)
                 }
             },
         )

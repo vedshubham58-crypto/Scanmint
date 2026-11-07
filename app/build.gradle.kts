@@ -110,5 +110,8 @@ dependencies {
     // Google Play subscriptions (ScanMint Pro)
     implementation("com.android.billingclient:billing:8.0.0")
 
+    // Google's in-app review card ("Rate us")
+    implementation("com.google.android.play:review:2.0.2")
+
     testImplementation("junit:junit:4.13.2")
 }

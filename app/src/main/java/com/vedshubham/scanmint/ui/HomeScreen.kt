@@ -85,10 +85,12 @@ fun HomeScreen(
     vm: AppViewModel,
     actions: DocActions,
     onTool: (Tool) -> Unit,
+    onMenu: (MenuItem) -> Unit,
 ) {
     val docs by vm.store.docs.collectAsState()
     val adsReady by Ads.ready.collectAsState()
     val pro by com.vedshubham.scanmint.billing.Billing.pro.collectAsState()
+    val privacyNeeded by Ads.privacyOptionsRequired.collectAsState()
     var query by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf<Tool?>(null) }
     var compressing by remember { mutableStateOf<Doc?>(null) }
@@ -105,7 +107,7 @@ fun HomeScreen(
                 Modifier.fillMaxSize().statusBarsPadding(),
                 contentPadding = PaddingValues(bottom = 120.dp),
             ) {
-                item { TopRow(pro = pro, onPro = { onTool(Tool.PRO) }) }
+                item { TopRow(pro = pro, privacyNeeded = privacyNeeded, onPro = { onTool(Tool.PRO) }, onMenu = onMenu) }
                 item {
                     OutlinedTextField(
                         value = query,
@@ -177,7 +179,8 @@ fun HomeScreen(
 }
 
 @Composable
-private fun TopRow(pro: Boolean, onPro: () -> Unit) {
+private fun TopRow(pro: Boolean, privacyNeeded: Boolean, onPro: () -> Unit, onMenu: (MenuItem) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -205,8 +208,21 @@ private fun TopRow(pro: Boolean, onPro: () -> Unit) {
             fontWeight = FontWeight.ExtraBold,
             fontSize = 12.sp,
         )
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Menu") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Rate ScanMint ⭐") }, onClick = { menu = false; onMenu(MenuItem.RATE) })
+                DropdownMenuItem(text = { Text("Privacy policy") }, onClick = { menu = false; onMenu(MenuItem.PRIVACY_POLICY) })
+                if (privacyNeeded) {
+                    DropdownMenuItem(text = { Text("Ad choices") }, onClick = { menu = false; onMenu(MenuItem.AD_CHOICES) })
+                }
+            }
+        }
     }
 }
+
+/** Items in the ⋮ menu at the top of the home screen. */
+enum class MenuItem { RATE, PRIVACY_POLICY, AD_CHOICES }
 
 @Composable
 private fun ToolGrid(onTool: (Tool) -> Unit) {

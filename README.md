@@ -15,7 +15,9 @@ and save or share them as PDF. Everything stays on the phone.
   no ads, password-locked PDFs (AES-128, opens in every PDF reader), and signing documents.
 - Ads in the free version: banner on the home screen, a full-screen ad before Save and Share
   (at most one a minute), and an optional video that turns ads off for 24 hours.
-  Google's consent form (UMP) shows in the UK/EEA; "Ad choices" sits on the Pro page.
+  Google's consent form (UMP) shows in the UK/EEA; "Ad choices" sits in the ⋮ menu and on the Pro page.
+- **Rate us**: Google's in-app review card after the 3rd successful save or share (at most every 60 days;
+  Google also limits it), and "Rate ScanMint" in the ⋮ menu opens the Play Store page.
 
 ## Test build
 

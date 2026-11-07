@@ -42,6 +42,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Set when a locked copy is ready; the activity opens the share sheet or file picker. */
     var lockedCopy by mutableStateOf<LockedCopy?>(null)
 
+    /** Goes up after each successful save or share; the activity may then ask for a rating. */
+    var successes by mutableStateOf(0)
+
     var route by mutableStateOf<Route>(Route.Home)
     var busy by mutableStateOf<Busy?>(null)
         private set
@@ -248,6 +251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         toast = "Saved"
+        successes++
     }
 
     /**
