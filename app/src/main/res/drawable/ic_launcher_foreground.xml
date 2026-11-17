@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App icon: a white page with text lines, framed by mint scanner corners, on deep mint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- the page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,33 L62,33 L70,41 L70,75 Q70,77 68,77 L40,77 Q38,77 38,75 L38,35 Q38,33 40,33 Z" />
+    <!-- folded corner -->
+    <path
+        android:fillColor="#B8F2DC"
+        android:pathData="M62,33 L70,41 L64,41 Q62,41 62,39 Z" />
+    <!-- text lines -->
+    <path
+        android:strokeColor="#0F8F6A"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M44,48 L64,48 M44,55 L64,55 M44,62 L58,62 M44,69 L61,69" />
+    <!-- scanner corners -->
+    <path
+        android:strokeColor="#2CF0A8"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M30,36 L30,27 L39,27 M69,27 L78,27 L78,36 M78,74 L78,83 L69,83 M39,83 L30,83 L30,74" />
+    <!-- scan beam -->
+    <path
+        android:strokeColor="#CC2CF0A8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M27,55 L81,55" />
+</vector>
