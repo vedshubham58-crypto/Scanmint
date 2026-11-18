@@ -53,4 +53,4 @@ copy on any server, so there is nothing else to delete.
 ## Changes and contact
 
 If this policy changes, the new version will be posted on this page with a new date.
-Questions: CONTACT_EMAIL
+Questions: scanmint.help@gmail.com
