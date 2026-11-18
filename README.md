@@ -39,14 +39,12 @@ Kotlin + Jetpack Compose, minSdk 26.
 ## Store build
 
 The **Store build (Google Play)** workflow (Actions tab → Run workflow) makes the signed `.aab`
-for Play Console. One-time setup, in this order:
+for Play Console. The real AdMob IDs are in `gradle.properties`. One-time setup, in this order:
 
 1. Settings → Secrets and variables → Actions → **Secrets**: add `SIGNING_PASSWORD`
    (at least 16 characters; write it down somewhere safe, it can't be recovered).
 2. Actions → **Make upload key (run once)** → Run workflow. This saves a locked key in `signing/`.
-3. Settings → Secrets and variables → Actions → **Variables**: add your real AdMob IDs as
-   `ADMOB_APP_ID`, `ADMOB_BANNER_ID`, `ADMOB_INTERSTITIAL_ID`, `ADMOB_REWARDED_ID`.
-4. Actions → **Store build (Google Play)** → Run workflow. The file appears at
+3. Actions → **Store build (Google Play)** → Run workflow. The file appears at
    https://github.com/vedshubham58-crypto/Scanmint/releases/download/store-build/scanmint-release.aab
 
 Turn on **Play App Signing** when Play Console asks (it's the default). The privacy policy for the
