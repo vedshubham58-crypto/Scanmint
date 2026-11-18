@@ -13,7 +13,8 @@ val testInterstitialId = "ca-app-pub-3940256099942544/1033173712"
 val testRewardedId = "ca-app-pub-3940256099942544/5224354917"
 
 fun prop(name: String): String =
-    (System.getenv(name) ?: project.findProperty(name)?.toString()).orEmpty().trim()
+    System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: project.findProperty(name)?.toString().orEmpty().trim()
 
 fun realOrTest(name: String, test: String): String = prop(name).ifEmpty { test }
 
