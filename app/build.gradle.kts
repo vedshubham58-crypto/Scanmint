@@ -31,16 +31,18 @@ android {
     }
 
     // The upload key for Google Play. The release workflow unlocks it from signing/upload-key.p12.enc
-    // with the SIGNING_PASSWORD secret; see PUBLISHING.md.
+    // with the SIGNING_PASSWORD secret; see README.md.
     val keystore = prop("SIGNING_KEYSTORE")
+    // Not trimmed: the key was made with the password exactly as typed, spaces included.
+    val signingPassword = System.getenv("SIGNING_PASSWORD").orEmpty()
     signingConfigs {
         if (keystore.isNotEmpty()) {
             create("upload") {
                 storeFile = file(keystore)
                 storeType = "PKCS12"
-                storePassword = prop("SIGNING_PASSWORD")
+                storePassword = signingPassword
                 keyAlias = "upload"
-                keyPassword = prop("SIGNING_PASSWORD")
+                keyPassword = signingPassword
             }
         }
     }
